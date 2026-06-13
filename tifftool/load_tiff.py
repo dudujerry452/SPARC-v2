@@ -169,19 +169,49 @@ def check_compliance(tiff, summary, drange=1500):
   ret = "\n".join(msgs)
   return (flag, ret, t)
 
-def load_correct_tiff(tiff): 
+def load_correct_tiff(tiff):
+    tiff = load_tiff(tiff) 
     s = compute_tiff_summary(tiff)
     _, _, ret = check_compliance(tiff, s)
     return ret 
   
+def add_noise(tiff, snr, gau_ratio, rng=None): 
+
+    if rng is None: 
+        rng = np.random.default_rng()
+
+    tiff = tiff.astype(np.float64) 
+    ret = np.zeros_like(tiff, dtype=np.uint16)
+    snr = 10.0 ** (snr / 20.0) # 功率 -> 振幅
+
+    for i, img in enumerate(tiff): 
+
+        mu = img.mean()
+
+        scale = (1 + gau_ratio) * (snr **2) / mu 
+        photons = img * scale 
+        photons_noisy = rng.poisson(photons).astype(np.float64) 
+        g_std = np.sqrt(gau_ratio * photons.mean())
+
+        # 高斯噪声
+        photons_noisy += rng.normal(0.0, g_std, size=photons.shape)
+        photons_noisy = np.maximum(photons_noisy, 0.0) 
+
+        noise = photons_noisy / scale
+
+        ret[i] = np.clip(noise, 0, 65535).astype(np.uint16) 
+
+    return ret
+
+def downsample_y(tiff, fac=4): 
+    return tiff[:, ::fac, :]
+
+
 if __name__ == "__main__": 
 
   parser = argparse.ArgumentParser(
-          description="Evaluate reconstructed TIFF against ground truth (SPARC paper metrics)"
-      )
-  parser.add_argument(
-      "tif", type=str, help="Path to ground truth TIFF stack"
-  )
+      description="Evaluate reconstructed TIFF against ground truth (SPARC paper metrics)")
+  parser.add_argument("tif", type=str, help="Path to ground truth TIFF stack")
   args = parser.parse_args()
 
   tiff = load_tiff(args.tif)
@@ -214,4 +244,5 @@ if __name__ == "__main__":
           except Exception as e:
               print(f"Failed to save fixed TIFF: {e}")
       
+
 

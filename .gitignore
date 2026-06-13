@@ -2,3 +2,4 @@
 .venv 
 naomi_generate.m
 temp.sh
+__pycache__

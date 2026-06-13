@@ -17,9 +17,10 @@ class PatchDataset(torchdata.Dataset):
                ):
     super().__init__()
 
-    files = [f for f in os.listdir(raw_data_folder) if os.path.isfile(os.path.join(raw_data_folder, f))]
+    files_raw = [f for f in os.listdir(raw_data_folder) if os.path.isfile(os.path.join(raw_data_folder, f)) and f.endswith(".tif")]
+    files_label = [f for f in os.listdir(raw_data_folder) if os.path.isfile(os.path.join(raw_data_folder, f)) and f.endswith("_label.tif")]
 
-    print(files) 
+    print(files_raw) 
 
-dataset = PatchDataset("../zzydata/standard")
+dataset = PatchDataset("../zzydata/standard", "../zzydata/standard")
     
