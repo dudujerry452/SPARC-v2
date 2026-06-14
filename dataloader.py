@@ -87,10 +87,10 @@ class PatchDataset(torchdata.Dataset):
             x1 = x * scale_w 
             self.label_patchs.append(label[y1:y1+patch_y*scale_h, x1:x1+patch_x*scale_w])
 
-      self.sample_patchs = np.stack(self.sample_patchs) 
-      self.label_patchs = np.stack(self.label_patchs)
-      print(self.sample_patchs.shape) 
-      print(self.label_patchs.shape)
+    self.sample_patchs = np.stack(self.sample_patchs) 
+    self.label_patchs = np.stack(self.label_patchs)
+    # print(self.sample_patchs.shape) 
+    # print(self.label_patchs.shape)
 
       # write_tiff(self.sample_patchs[0], "tests.tif")
       # write_tiff(self.label_patchs[0], "testl.tif")
@@ -105,6 +105,10 @@ class PatchDataset(torchdata.Dataset):
     
     raw_img, label_img = random_transform(raw_img, label_img)
 
+    raw_img = raw_img[0:1, :, :].squeeze(axis=0) # 暂时丢弃3D数据, 只使用其第一帧
+
+    # print(raw_img.shape, label_img.shape)
+
     raw_tensor = torch.from_numpy(np.expand_dims(raw_img, 0).copy())
     label_tensor = torch.from_numpy(np.expand_dims(label_img, 0).copy())
 
@@ -115,18 +119,16 @@ class PatchDataset(torchdata.Dataset):
       
 
 
-dataset = PatchDataset(
-   "../zzydata/dataset_st/samples", 
-   "../zzydata/dataset_st/labels", 
-   1)
+# dataset = PatchDataset(
+#    "../zzydata/dataset_st/samples", 
+#    "../zzydata/dataset_st/labels", 
+#    2)
 
-dataloader = torchdata.DataLoader(
-   dataset, 
-   batch_size=4, 
-   shuffle=True, 
-   num_workers=0
-)
+# dataloader = torchdata.DataLoader(
+#    dataset, 
+#    batch_size=4, 
+#    shuffle=True, 
+#    num_workers=0
+# )
 
-for raw, label in dataloader: 
-   print(raw.shape, label.shape)
-    
+
