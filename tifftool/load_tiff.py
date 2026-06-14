@@ -8,7 +8,7 @@ from scipy.stats import pearsonr
 
 
 def load_tiff(path):
-    """Load a TIFF file and return as float32 numpy array."""
+    """Load a TIFF file and return. might be different type"""
     img = tifffile.imread(path)
     # img = img.astype(np.int16)
     return img
@@ -169,11 +169,14 @@ def check_compliance(tiff, summary, drange=1500):
   ret = "\n".join(msgs)
   return (flag, ret, t)
 
-def load_correct_tiff(tiff):
-    tiff = load_tiff(tiff) 
+def load_correct_tiff(tiff_path):
+    tiff = load_tiff(tiff_path) 
     s = compute_tiff_summary(tiff)
     _, _, ret = check_compliance(tiff, s)
     return ret 
+
+def write_tiff(tiff, tiff_path): 
+    tifffile.imwrite(tiff_path, tiff)
   
 def add_noise(tiff, snr, gau_ratio, rng=None): 
 
