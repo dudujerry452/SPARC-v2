@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tensor Visualizer</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #111;
+      color: #eee;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 10px;
+    }
+    #status {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 20px;
+    }
+    #gallery {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .panel {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 6px;
+      padding: 8px;
+      min-width: 320px;
+    }
+    .panel h3 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .panel img {
+      display: block;
+      width: 100%;
+      height: auto;
+      border-radius: 4px;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+  <h1>Real-time Tensor Visualizer</h1>
+  <div id="status">Connecting...</div>
+  <div id="gallery"></div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const gallery = document.getElementById('gallery');
+    const panels = {};
+
+    function setStatus(text, color) {
+      statusEl.textContent = text;
+      statusEl.style.color = color || '#888';
+    }
+
+    function ensurePanel(name) {
+      if (!panels[name]) {
+        const panel = document.createElement('div');
+        panel.className = 'panel';
+        panel.innerHTML = `<h3>${name}</h3><img id="img-${name}" alt="${name}">`;
+        gallery.appendChild(panel);
+        panels[name] = true;
+      }
+    }
+
+    const socket = io({
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      randomizationFactor: 0.5
+    });
+
+    socket.on('connect', () => {
+      setStatus(`Connected: ${socket.id}`, '#4caf50');
+    });
+
+    socket.on('disconnect', (reason) => {
+      setStatus(`Disconnected: ${reason}. Reconnecting...`, '#f44336');
+    });
+
+    socket.on('reconnect', (attempt) => {
+      setStatus(`Reconnected after ${attempt} attempt(s)`, '#4caf50');
+    });
+
+    socket.on('reconnect_error', (err) => {
+      setStatus(`Reconnect error: ${err.message}`, '#ff9800');
+    });
+
+    socket.on('tensor', (data) => {
+      ensurePanel(data.name);
+      document.getElementById(`img-${data.name}`).src = data.image;
+    });
+  </script>
+</body>
+</html>

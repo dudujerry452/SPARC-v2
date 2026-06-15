@@ -4,6 +4,8 @@ import torch.utils.data as torchdata
 from dataloader import PatchDataset
 import torch.nn.functional as F 
 
+from visualizer.hook import start_visualizer, send_tensor
+
 
 class LTE(nn.Module): 
   """
@@ -172,6 +174,9 @@ class TTSR(nn.Module):
     F = self.BB(lr)
     
     output = self.SA(F, T, S) 
+
+    # send_tensor("out", output[0][0], f"TTSR top output")
+
     output = self.OL(output, Hr, Wr)
     
     return output

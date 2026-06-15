@@ -5,6 +5,7 @@ from dataloader import PatchDataset
 from tifftool.load_tiff import write_tiff
 import torch.nn.functional as F 
 from network import TTSR
+from visualizer.hook import start_visualizer, send_tensor
 import os
 
 
@@ -23,6 +24,8 @@ dataloader = torchdata.DataLoader(
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+start_visualizer(port=5000)
+
 net = TTSR(in_ch=1, feat_ch=64).to(device)
 optimizer = torch.optim.Adam(net.parameters(), lr=1e-4) 
 criterion = nn.L1Loss() 
@@ -34,7 +37,8 @@ for epoch in range(10):
     sample = sample.to(device) 
     label = label.to(device) 
 
-    sr = net(sample, label) # use label as ref  
+    sr = net(sample, label) # use label as ref
+    # send_tensor('sr', sr[0], title=f'epoch{epoch} idx{idx} sr')
     loss = criterion(sr, label) 
 
     optimizer.zero_grad() 

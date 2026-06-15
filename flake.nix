@@ -40,6 +40,11 @@
               echo "Installing Python dependencies..."
               pip install numpy scipy pillow tifffile
             fi
+
+            if ! python -c "import flask, flask_socketio, matplotlib" 2>/dev/null; then
+              echo "Installing visualization dependencies..."
+              pip install flask flask-socketio python-socketio matplotlib
+            fi
           }
 
           echo "SPARC environment ready."
