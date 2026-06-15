@@ -5,3 +5,4 @@ temp.sh
 __pycache__
 checkpoint
 doc
+*.tif
