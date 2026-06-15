@@ -52,7 +52,7 @@ def main():
         num_workers=0,
     )
 
-    metric_keys = ["MAE", "MSE", "RMSE", "PSNR", "SSIM", "SSIE", "Pearson"]
+    metric_keys = ["MAE", "MSE", "RMSE", "PSNR", "SSIM", "SSIE", "Pearson", "Mixed"]
     batch_metrics = []
 
     with torch.no_grad():

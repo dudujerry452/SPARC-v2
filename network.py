@@ -138,18 +138,63 @@ class SoftAttention(nn.Module):
 
     return result 
   
+class PixelShuffleH(nn.Module):
+    def __init__(self, upscale_factor=2):
+        super().__init__()
+        self.upscale_factor = upscale_factor
+
+    def forward(self, x):
+        B, Cr, H, W = x.shape
+        r = self.upscale_factor
+        C = Cr // r
+
+        # (B, C, r, H, W)
+        x = x.reshape(B, C, r, H, W)
+
+        # (B, C, H, r, W) -> (B, C, H*r, W)
+        x = x.permute(0, 1, 3, 2, 4)
+        x = x.reshape(B, C, H * r, W)
+
+        return x
+class PixelShuffleW(nn.Module):
+    def __init__(self, upscale_factor=2):
+        super().__init__()
+        self.upscale_factor = upscale_factor
+
+    def forward(self, x):
+        B, Cr, H, W = x.shape
+        r = self.upscale_factor
+        C = Cr // r
+
+        # (B, C, r, H, W)
+        x = x.reshape(B, C, r, H, W)
+
+        # (B, C, H, W, r) -> (B, C, H, W*r)
+        x = x.permute(0, 1, 3, 4, 2)
+        x = x.reshape(B, C, H, W * r)
+
+        return x
+
+
 
 class OutputLayer(nn.Module): 
   """
   算出F + fused * S后上采样
   """
-  def __init__(self, in_ch=1, feat_ch=64): 
+  def __init__(self, in_ch=1, feat_ch=64, scale=(4, 1)): 
     super().__init__()
-    self.conv = nn.Conv2d(feat_ch, in_ch, 3, 1, 1) 
-  def forward(self, x, Hr, Wr): 
-    x_up = F.interpolate(x, size=(Hr, Wr), mode="bicubic", align_corners=False)
-    x_output = self.conv(x_up) 
-    return x_output
+    self.conv = nn.Conv2d(feat_ch, in_ch * scale[0] * scale[1], 3, 1, 1) 
+    self.shuffleh = PixelShuffleH(scale[0]) 
+    self.shufflew = PixelShuffleW(scale[1]) 
+    self.scale = scale
+  def forward(self, x):
+    x = self.conv(x) 
+
+    if self.scale[0] != 1: 
+       x = self.shuffleh(x) 
+    if self.scale[1] != 1: 
+       x = self.shufflew(x) 
+    return x
 
 
 
@@ -166,7 +211,7 @@ class TTSR(nn.Module):
     self.HA = HardAttention()
     self.SA = SoftAttention(feat_ch)
     self.BB = Backbone(in_ch, feat_ch)
-    self.OL = OutputLayer(in_ch, feat_ch) 
+    self.OL = OutputLayer(in_ch, feat_ch, scale=(4,1)) 
   def forward(self, lr, ref): 
     Hl, Wl, Hr, Wr = lr.shape[2], lr.shape[3], ref.shape[2], ref.shape[3]
 
@@ -179,7 +224,7 @@ class TTSR(nn.Module):
 
     # send_tensor("out", output[0][0], f"TTSR top output")
 
-    output = self.OL(output, Hr, Wr)
+    output = self.OL(output)
     
     return output
 
