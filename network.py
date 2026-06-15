@@ -159,6 +159,8 @@ class TTSR(nn.Module):
   """
   def __init__(self, in_ch=1, feat_ch=64):
     super().__init__()
+    self.name = "TTSR-basic"
+
     self.LTE = LTE(feat_ch)
     self.RE = RelianceEmbedding(kernel_size=3)
     self.HA = HardAttention()

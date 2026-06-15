@@ -8,12 +8,9 @@ import torch.utils.data as torchdata
 
 import sys
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-sys.path.append(project_root)
-
+from tifftool.load_tiff import write_tiff
 from dataloader import PatchDataset
-from metrics import evaluate_batch
+from tifftool.metrics import evaluate_batch
 from network import TTSR
 
 
@@ -22,6 +19,7 @@ def parse_args():
     parser.add_argument("--model", required=True, help="Path to model checkpoint (.pth)")
     parser.add_argument("--samples", required=True, help="Path to LR sample images")
     parser.add_argument("--labels", required=True, help="Path to HR label images")
+    parser.add_argument("--output_folder", default=".", help="Path to HR label images")
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--num-samples", type=int, default=None, help="Maximum number of samples to evaluate")
     parser.add_argument("--output-csv", type=str, default=None, help="Optional CSV path to save per-batch metrics")
@@ -30,6 +28,8 @@ def parse_args():
 
 def main():
     args = parse_args()
+
+    os.makedirs(args.output_folder, exist_ok=True)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -63,6 +63,19 @@ def main():
             sr = net(sample, label)
             metrics = evaluate_batch(sr, label)
             batch_metrics.append(metrics)
+
+        for sample, label in dataloader: 
+            sample = sample.to(device)
+            label = label.to(device)
+
+            sr = net(sample, label)
+
+            basename = os.path.join(args.output_folder, net.name) 
+            write_tiff(sample.detach().cpu().numpy(), basename+"_sample.tif")
+            write_tiff(label.detach().cpu().numpy(), basename+"_label.tif")
+            write_tiff(sr.detach().cpu().numpy(), basename+"_sr.tif")
+
+            break 
 
     if not batch_metrics:
         print("No samples evaluated.")

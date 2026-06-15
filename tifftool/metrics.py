@@ -123,4 +123,5 @@ def evaluate_batch(pred, target):
         "SSIM": SSIM(pred, target, data_range=data_range),
         "SSIE": SSIE(pred, target, data_range=data_range),
         "Pearson": Pearson(pred, target),
+        "Mixed": Mixed(pred, target)
     }
