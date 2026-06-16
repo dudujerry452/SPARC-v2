@@ -14,6 +14,7 @@
           python3
           python3Packages.opencv4
           python3Packages.scikit-image
+          python3Packages.tqdm
           stdenv.cc.cc.lib
           zlib
           git

@@ -5,6 +5,7 @@ import os
 import numpy as np
 import torch
 import torch.utils.data as torchdata
+from tqdm import tqdm
 
 import sys
 
@@ -12,13 +13,17 @@ from tifftool.load_tiff import write_tiff
 from dataloader import PatchDataset
 from tifftool.metrics import evaluate_batch
 from network import TTSR
+from denoise_network import UNet3D
+from upsample_utils import upsample_matrix
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate a TTSR checkpoint on a dataset.")
     parser.add_argument("--model", required=True, help="Path to model checkpoint (.pth)")
+    parser.add_argument("--denoise-weight", required=True, help="Path to denoise model checkpoint (.pth)")
     parser.add_argument("--samples", required=True, help="Path to LR sample images")
     parser.add_argument("--labels", required=True, help="Path to HR label images")
+    parser.add_argument("--groundtruth", type=str, default=None, help="Path to 3D ground truth images (optional)")
     parser.add_argument("--output_folder", default=".", help="Path to HR label images")
     parser.add_argument("--batch-size", type=int, default=1, help="Batch size")
     parser.add_argument("--num-samples", type=int, default=None, help="Maximum number of samples to evaluate")
@@ -42,11 +47,17 @@ def main():
     net.load_state_dict(torch.load(args.model, map_location=device, weights_only=False))
     net.eval()
 
-    dataset = PatchDataset(args.samples, args.labels, 1,
+    denoise_model = UNet3D(in_channels=1, out_channels=1, f_maps=16).to(device)
+    denoise_model.load_state_dict(torch.load(args.denoise_weight, map_location=device, weights_only=False))
+    denoise_model.eval()
+    for param in denoise_model.parameters():
+        param.requires_grad = False
+
+    dataset = PatchDataset(args.samples, args.labels, args.groundtruth, 1,
                            patch_t=args.patch_t,
                            patch_y=args.patch_y,
                            patch_x=args.patch_x,
-                           use_video=True, use_random=False)
+                           use_video=True, use_random=False, use_range=(0.0, 0.1))
 
     if args.num_samples is not None:
         indices = list(range(min(args.num_samples, len(dataset))))
@@ -64,31 +75,52 @@ def main():
     metric_keys = ["MAE", "MSE", "RMSE", "PSNR", "SSIM", "SSIE", "Pearson", "Mixed"]
     batch_metrics = []
 
+    def make_ref(sample, label):
+        with torch.no_grad():
+            denoised, _ = denoise_model(sample)
+            ref_list = []
+            for b in range(denoised.size(0)):
+                ref_label = label[b, 0, :, :]
+                ref_b = upsample_matrix(denoised[b:b+1], ref_label)
+                ref_list.append(ref_b)
+            ref = torch.cat(ref_list, dim=0).to(device)
+        return ref
+
     with torch.no_grad():
 
         if args.metric is True:
-            for sample, label in dataloader:
+            for batch in tqdm(dataloader, desc="metric eval"):
+                sample = batch[0].to(device)
+                label = batch[1].to(device)
+                gt = batch[2].to(device) if len(batch) > 2 else None
 
-                sample = sample.to(device)
-                label = label.to(device)
+                T = sample.size(2)
+                ref = label.unsqueeze(2).expand(-1, -1, T, -1, -1)
+                sr = net(sample, ref)
 
-                sr = net(sample, label)
-                metrics = evaluate_batch(sr, label)
+                target = gt if gt is not None else ref
+                metrics = evaluate_batch(sr, target)
                 batch_metrics.append(metrics)
 
-        for idx, (sample, label) in enumerate(dataloader):
+        for idx, batch in enumerate(tqdm(dataloader, desc="sample eval")):
 
             if idx == args.sample_id:
 
-                label = label.to(device)
-                sample = sample.to(device)
+                sample = batch[0].to(device)
+                label = batch[1].to(device)
+                gt = batch[2].to(device) if len(batch) > 2 else None
 
-                sr = net(sample, label)
+                T = sample.size(2)
+                ref = label.unsqueeze(2).expand(-1, -1, T, -1, -1)
+                sr = net(sample, ref)
 
                 basename = os.path.join(args.output_folder, net.name)
                 write_tiff(sample.detach().cpu().numpy(), basename+"_sample.tif")
                 write_tiff(label.detach().cpu().numpy(), basename+"_label.tif")
+                write_tiff(ref.detach().cpu().numpy(), basename+"_ref.tif")
                 write_tiff(sr.detach().cpu().numpy(), basename+"_sr.tif")
+                if gt is not None:
+                    write_tiff(gt.detach().cpu().numpy(), basename+"_gt.tif")
                 break
 
     if not batch_metrics:

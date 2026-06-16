@@ -282,6 +282,8 @@ class TTSR(nn.Module):
     self.mainnet = MainNet(feat_ch=64, out_ch=1, scale=(2,1))  # hard-coded
   def forward(self, lr, ref):
 
+    # print(ref.shape)
+
     B, _, T, H, W = lr.shape
     _, _, T1, H1, W1 = ref.shape
     scale_h = H / H1

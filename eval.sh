@@ -39,19 +39,31 @@ if [ "$DO_TRAIN" = true ]; then
   python3 train.py \
     --samples ~/zzydata/dataset_st/samples \
     --labels ~/zzydata/dataset_st/labels \
+    --groundtruth ~/zzydata/dataset_st/groundtruth \
     --checkpoint_folder ./checkpoint \
     --epoch ${TRAIN_EPOCH} \
     --batch-size 1 \
-    --num-dataset 1 
+    --denoise-batch-size 10 \
+    --denoise-epoch 5 \
+    --patch-t 16 \
+    --patch-y 32 \
+    --patch-x 128 \
+    --num-dataset 1
+    # --denoise-weight ./checkpoint/denoise_init.pth
 fi
 
 if [ "$DO_EVAL" = true ]; then
   python3 eval.py \
     --model ./checkpoint/TTSR-basic_epoch${EPOCH_1}.pth \
+    --denoise-weight ./checkpoint/denoise_init.pth \
     --samples ~/zzydata/dataset_st/samples \
     --labels ~/zzydata/dataset_st/labels \
+    --groundtruth ~/zzydata/dataset_st/groundtruth \
     --output_folder ~/tmp/result \
     --batch-size 1 \
+    --patch-t 16 \
+    --patch-y 32 \
+    --patch-x 128 \
     --metric \
-    --sample_id 21 
+    --sample_id 21
 fi
