@@ -3,6 +3,7 @@ from torch import nn
 import torch.utils.data as torchdata
 from dataloader import PatchDataset
 import torch.nn.functional as F 
+import math
 
 from visualizer.hook import start_visualizer, send_tensor
 
@@ -250,6 +251,85 @@ class OutputLayer(nn.Module):
     return x
 
 
+class MainNet(nn.Module): 
+  """
+  拼接三个尺度的V, 以及lr, S
+  """
+
+  def __init__(self, feat_ch=64, out_ch=1, scale=(2,1)): 
+    super().__init__() 
+    self.SFE = SFE(1, 64) 
+
+    self.scale = scale
+    up_dims = scale[0] * scale[1]
+    self.conv =  nn.ModuleList([nn.Conv2d(feat_ch + 256, feat_ch, 3, 1, 1), 
+                    nn.Conv2d(feat_ch + 128, feat_ch, 3, 1, 1) , 
+                    nn.Conv2d(feat_ch + 64, feat_ch, 3, 1, 1)])
+    self.up_conv =  nn.ModuleList([nn.Conv2d(feat_ch, feat_ch * up_dims, 3, 1, 1 ), 
+                        nn.Conv2d(feat_ch, feat_ch * up_dims, 3, 1, 1 ), 
+                        nn.Conv2d(feat_ch, feat_ch * up_dims, 3, 1, 1 )])
+    self.final_conv = nn.Conv2d(feat_ch, out_ch, 3, 1, 1)
+
+    if self.scale[0] != 1: 
+      self.shuffle_h = nn.ModuleList([PixelShuffleH(scale[0]), 
+                            PixelShuffleH(scale[0])])
+    else: 
+      self.shuffle_h = None 
+    if self.scale[1] != 1: 
+      self.shuffle_w = nn.ModuleList([PixelShuffleW(scale[1]), 
+                        PixelShuffleW(scale[1])])
+    else: 
+      self.shuffle_w = None 
+
+    self.resblks = nn.ModuleList([
+       nn.Sequential(ResBlock(feat_ch), ResBlock(feat_ch), ResBlock(feat_ch)),
+       nn.Sequential(ResBlock(feat_ch), ResBlock(feat_ch), ResBlock(feat_ch)), 
+       nn.Sequential(ResBlock(feat_ch), ResBlock(feat_ch), ResBlock(feat_ch)) 
+    ])
+    self.res_tails = nn.ModuleList([
+       nn.Conv2d(feat_ch, feat_ch, 3, 1, 1), 
+       nn.Conv2d(feat_ch, feat_ch, 3, 1, 1), 
+       nn.Conv2d(feat_ch, feat_ch, 3, 1, 1) 
+    ])
+  
+  def stage(self, T, S, F_, idx): 
+    T = F.interpolate(T, size=(F_.shape[2], F_.shape[3]), mode="bicubic", align_corners=False) 
+    S = F.interpolate(S, size=(F_.shape[2], F_.shape[3]), mode="bicubic", align_corners=False) 
+
+    fused = torch.cat([F_, T], dim=1) # channel: 256 + 64
+    F_ = (self.conv[idx](fused))*S + F_
+
+    if idx != 2: 
+      # upsample 2x 
+      F_ = self.up_conv[idx](F_) 
+      if self.shuffle_h: 
+          F_ = self.shuffle_h[idx](F_) 
+      if self.shuffle_w: 
+          F_ = self.shuffle_w[idx](F_)
+
+    res = F_ 
+    for rb in self.resblks[idx]: 
+      res = rb(res)  
+    res = self.res_tails[idx](res) 
+    F_ = F_ + res 
+
+    return F_ 
+
+
+   
+  def forward(self, lr, S, T_v1, T_v2, T_v3): 
+
+    F_ = self.SFE(lr)  # F 1x 
+    Ts = [T_v3, T_v2, T_v1]
+
+    for i, T in enumerate(Ts): 
+       F_ = self.stage(T, S, F_, i) 
+
+    F_ = self.final_conv(F_) 
+    return F_ 
+
+      
+
 
 class TTSR(nn.Module): 
   """
@@ -264,6 +344,7 @@ class TTSR(nn.Module):
     self.SA = SoftAttention(feat_ch)
     self.Backbone = SFE(in_ch, feat_ch)
     self.OL = OutputLayer(in_ch, feat_ch, scale=(4,1)) 
+    self.mainnet = MainNet(feat_ch=64, out_ch=1, scale=(2,1))  # hard-coded
   def forward(self, lr, ref): 
 
     B, _, H, W = lr.shape 
@@ -283,19 +364,7 @@ class TTSR(nn.Module):
 
     S, T_v1, T_v2, T_v3 = self.SearchTransfer(Q, K, ref_v1, ref_v2, ref_v3)
 
-    T = T_v3 
-
-    S = F.interpolate(S, size=(lr.shape[2], lr.shape[3]), align_corners=False, mode="bicubic")
-    T = F.interpolate(T, size=(lr.shape[2], lr.shape[3]), align_corners=False, mode="bicubic")
-
-
-    F_ = self.Backbone(lr) # (B, C, H, W)
-    
-    output = self.SA(F_, T, S) 
-
-    # send_tensor("out", output[0][0], f"TTSR top output")
-
-    output = self.OL(output)
+    output = self.mainnet(lr, S, T_v1, T_v2, T_v3 )
     
     return output
 
