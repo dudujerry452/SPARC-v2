@@ -8,52 +8,6 @@ import math
 from visualizer.hook import start_visualizer, send_tensor
 
 
-class LTE(nn.Module): 
-  """
-  可学习纹理提取器
-  """
-
-  def __init__(self, feat_ch=64):
-    super().__init__() 
-    self.body = nn.Sequential(
-        nn.Conv2d(1, feat_ch, 3, 1, 1), 
-        nn.ReLU(),  # nn.ReLU(inplace=True) to optimize 
-        nn.Conv2d(feat_ch, feat_ch, 3, 1, 1), 
-        nn.ReLU(), 
-        nn.Conv2d(feat_ch, feat_ch, 3, 1, 1), 
-      )
-
-    self.scale = nn.Sequential(
-      nn.Conv2d(1, feat_ch, 3, 1, 1), 
-      nn.ReLU(),  # nn.ReLU(inplace=True) to optimize 
-      nn.Conv2d(feat_ch, feat_ch, 3, 1, 1), 
-      nn.ReLU(), 
-    )
-    self.scale_final = nn.Conv2d(feat_ch, feat_ch, 3, 1, 1)
-
-
-  
-  def forward(self, lr, ref, target_size=None):  # lr is 低质量图像
-    _, _, H, W = lr.shape 
-    _, _, H1, W1 = ref.shape 
-    scale_h = H / H1
-    scale_w = W / W1 
-    lr_up = F.interpolate(lr, size=(H1, W1), mode="bicubic", align_corners=False)
-    ref_down = F.interpolate(ref, scale_factor=(scale_h, scale_w), mode="bicubic", align_corners=False)
-    ref_down_up = F.interpolate(ref_down, size=(H1, W1), mode="bicubic", align_corners=False)
-
-    if target_size:
-      Q = self.scale(lr_up) 
-      Q = F.adaptive_avg_pool2d(Q, target_size) 
-      Q = self.scale_final(Q)
-    else: 
-      Q = self.body(lr_up)
-    K = self.body(ref_down_up) 
-    
-    V = self.body(ref) 
-
-    return Q, K, V
-
 class LTEVGG(nn.Module): 
     def __init__(self, in_ch=1): 
       super().__init__() 
@@ -167,30 +121,6 @@ class SFE(nn.Module):
         res = self.conv_tail(res) 
         return x + res * self.scale 
    
-
-class SoftAttention(nn.Module): 
-  """
-  F: (B, C, Hl, Wl)
-  T: (B, C, N_q) 
-  S: (B, N_q)
-  """
-  def __init__(self, feat_ch=64): 
-    super().__init__() 
-    self.fusion_conv = nn.Sequential(
-      nn.Conv2d(feat_ch+ 256, feat_ch, 3, 1, 1),  # 256 from VGG19
-      nn.ReLU()
-    )
-
-  def forward(self, F, T, S): 
-    B, C, H, W = F.shape
-    # print(F.shape, T.shape, S.shape)
-
-    fused = torch.cat([F, T], dim=1) # concat them with channel dimension (B, 2*C, H, W)
-    fused = self.fusion_conv(fused)  # fuse them (B, C, H, W)
-
-    result = F + fused * S # F+: resnet; fused * S: 门控; result: (B, C, H, W)
-
-    return result 
   
 class PixelShuffleH(nn.Module):
     def __init__(self, upscale_factor=2):
@@ -229,26 +159,6 @@ class PixelShuffleW(nn.Module):
 
         return x
 
-
-
-class OutputLayer(nn.Module): 
-  """
-  算出F + fused * S后上采样
-  """
-  def __init__(self, in_ch=1, feat_ch=64, scale=(4, 1)): 
-    super().__init__()
-    self.conv = nn.Conv2d(feat_ch, in_ch * scale[0] * scale[1], 3, 1, 1) 
-    self.shuffleh = PixelShuffleH(scale[0]) 
-    self.shufflew = PixelShuffleW(scale[1]) 
-    self.scale = scale
-  def forward(self, x):
-    x = self.conv(x) 
-
-    if self.scale[0] != 1: 
-       x = self.shuffleh(x) 
-    if self.scale[1] != 1: 
-       x = self.shufflew(x) 
-    return x
 
 
 class MainNet(nn.Module): 
@@ -291,6 +201,8 @@ class MainNet(nn.Module):
        nn.Conv2d(feat_ch, feat_ch, 3, 1, 1), 
        nn.Conv2d(feat_ch, feat_ch, 3, 1, 1) 
     ])
+
+    self.merge_conv = nn.Conv2d(feat_ch*3, feat_ch, 3, 1, 1)
   
   def stage(self, T, S, F_, idx): 
     T = F.interpolate(T, size=(F_.shape[2], F_.shape[3]), mode="bicubic", align_corners=False) 
@@ -320,10 +232,17 @@ class MainNet(nn.Module):
   def forward(self, lr, S, T_v1, T_v2, T_v3): 
 
     F_ = self.SFE(lr)  # F 1x 
-    Ts = [T_v3, T_v2, T_v1]
 
-    for i, T in enumerate(Ts): 
-       F_ = self.stage(T, S, F_, i) 
+    F_1 = self.stage(T_v3, S, F_, 0) 
+    F_2 = self.stage(T_v2, S, F_1, 1) 
+    F_3 = self.stage(T_v1, S, F_2, 2) 
+
+    F_1up = F.interpolate(F_1, size=F_3.shape[2:], mode='bicubic')
+    F_2up = F.interpolate(F_2, size=F_3.shape[2:], mode='bicubic')
+
+    multi = torch.cat([F_1up, F_2up, F_3], dim=1) 
+    # print(multi.shape)
+    F_ = self.merge_conv(multi)
 
     F_ = self.final_conv(F_) 
     return F_ 
@@ -341,9 +260,7 @@ class TTSR(nn.Module):
 
     self.LTEVGG = LTEVGG(in_ch)
     self.SearchTransfer = SearchTransfer()
-    self.SA = SoftAttention(feat_ch)
     self.Backbone = SFE(in_ch, feat_ch)
-    self.OL = OutputLayer(in_ch, feat_ch, scale=(4,1)) 
     self.mainnet = MainNet(feat_ch=64, out_ch=1, scale=(2,1))  # hard-coded
   def forward(self, lr, ref): 
 
