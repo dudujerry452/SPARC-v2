@@ -17,12 +17,12 @@ def _batch_to_samples(pred, target):
     target = _to_numpy(target)
     if pred.shape != target.shape:
         raise ValueError(f"pred shape {pred.shape} does not match target shape {target.shape}")
-    if pred.ndim == 4:
+    if pred.ndim == 5:
         return [pred[i] for i in range(pred.shape[0])], [target[i] for i in range(target.shape[0])]
-    elif pred.ndim == 3:
+    elif pred.ndim == 4:
         return [pred], [target]
     else:
-        raise ValueError(f"Expected 3D or 4D input, got {pred.ndim}D")
+        raise ValueError(f"Expected 4D or 5D input, got {pred.ndim}D")
 
 
 def _mean_metric(metric_fn, pred, target, **kwargs):
@@ -74,9 +74,11 @@ def SSIM(pred, target, data_range=None):
         data_range = _data_range(pred, target)
 
     def _ssim(p, t):
-        if p.ndim == 3 and p.shape[0] == 1:
+        if p.ndim == 4 and p.shape[0] == 1:
             p = p[0]
             t = t[0]
+        if p.ndim == 3:
+            return np.mean([ssim(p[i], t[i], data_range=data_range) for i in range(p.shape[0])])
         return ssim(p, t, data_range=data_range)
 
     return _mean_metric(_ssim, pred, target)
@@ -108,7 +110,7 @@ def evaluate_batch(pred, target):
     Evaluate a batch of predictions against targets.
 
     Args:
-        pred: torch.Tensor or numpy array of shape (B, C, H, W) or (C, H, W).
+        pred: torch.Tensor or numpy array of shape (B, C, T, H, W) or (C, T, H, W).
         target: same shape as pred.
 
     Returns:

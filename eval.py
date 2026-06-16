@@ -20,8 +20,11 @@ def parse_args():
     parser.add_argument("--samples", required=True, help="Path to LR sample images")
     parser.add_argument("--labels", required=True, help="Path to HR label images")
     parser.add_argument("--output_folder", default=".", help="Path to HR label images")
-    parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
+    parser.add_argument("--batch-size", type=int, default=1, help="Batch size")
     parser.add_argument("--num-samples", type=int, default=None, help="Maximum number of samples to evaluate")
+    parser.add_argument("--patch-t", type=int, default=16, help="Temporal patch size")
+    parser.add_argument("--patch-y", type=int, default=32, help="Height patch size")
+    parser.add_argument("--patch-x", type=int, default=128, help="Width patch size")
     parser.add_argument("--output-csv", type=str, default=None, help="Optional CSV path to save per-batch metrics")
     parser.add_argument("--metric", action="store_true", help="display metric info")
     parser.add_argument("--sample_id", type=int, default=21, help="the sample id write to tiff")
@@ -39,7 +42,11 @@ def main():
     net.load_state_dict(torch.load(args.model, map_location=device, weights_only=False))
     net.eval()
 
-    dataset = PatchDataset(args.samples, args.labels, 1, use_video=True, use_random=False)
+    dataset = PatchDataset(args.samples, args.labels, 1,
+                           patch_t=args.patch_t,
+                           patch_y=args.patch_y,
+                           patch_x=args.patch_x,
+                           use_video=True, use_random=False)
 
     if args.num_samples is not None:
         indices = list(range(min(args.num_samples, len(dataset))))
@@ -59,10 +66,9 @@ def main():
 
     with torch.no_grad():
 
-        if args.metric is True: 
+        if args.metric is True:
             for sample, label in dataloader:
 
-                sample = sample[:, :, 0:1, :, :].squeeze(axis=1) # 暂时丢弃3D数据, 只使用其第一帧
                 sample = sample.to(device)
                 label = label.to(device)
 
@@ -70,25 +76,19 @@ def main():
                 metrics = evaluate_batch(sr, label)
                 batch_metrics.append(metrics)
 
-        for idx, (sample, label) in enumerate(dataloader): 
-            
-            if idx == args.sample_id: 
+        for idx, (sample, label) in enumerate(dataloader):
+
+            if idx == args.sample_id:
 
                 label = label.to(device)
                 sample = sample.to(device)
-                srs = []
-                
-                for idx in range(sample.shape[2]): 
-                    frame = sample[:, :, idx:(idx+1), :, :].squeeze(axis=1)
-                    sr = net(frame, label)
-                    srs.append(sr.detach().cpu().numpy()) 
 
-                srs = np.stack(srs) 
+                sr = net(sample, label)
 
-                basename = os.path.join(args.output_folder, net.name) 
+                basename = os.path.join(args.output_folder, net.name)
                 write_tiff(sample.detach().cpu().numpy(), basename+"_sample.tif")
                 write_tiff(label.detach().cpu().numpy(), basename+"_label.tif")
-                write_tiff(srs, basename+"_sr.tif")
+                write_tiff(sr.detach().cpu().numpy(), basename+"_sr.tif")
                 break
 
     if not batch_metrics:

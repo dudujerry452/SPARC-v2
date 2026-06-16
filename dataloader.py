@@ -112,8 +112,11 @@ class PatchDataset(torchdata.Dataset):
     if self.use_random == True: 
       raw_img, label_img = random_transform(raw_img, label_img)
 
-    if self.use_video == False: 
+    if self.use_video == False:
       raw_img = raw_img[0:1, :, :].squeeze(axis=0) # 暂时丢弃3D数据, 只使用其第一帧
+    else:
+      T = raw_img.shape[0]
+      label_img = np.broadcast_to(label_img[np.newaxis, :, :], (T, *label_img.shape))
 
     # print(raw_img.shape, label_img.shape)
 

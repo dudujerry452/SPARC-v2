@@ -14,17 +14,24 @@ def parse_args():
     parser.add_argument("--labels", required=True, help="Path to HR label images")
     parser.add_argument("--checkpoint_folder", default=".", help="Path to HR label images")
     parser.add_argument("--epoch", type=int, default=10, help="Batch size")
-    parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
+    parser.add_argument("--batch-size", type=int, default=1, help="Batch size")
     parser.add_argument("--num-dataset", type=int, default=1, help="Maximum number of dataset(tif pair) to evaluate")
+    parser.add_argument("--patch-t", type=int, default=16, help="Temporal patch size")
+    parser.add_argument("--patch-y", type=int, default=32, help="Height patch size")
+    parser.add_argument("--patch-x", type=int, default=128, help="Width patch size")
     parser.add_argument("--visualize", action="store_true", help="enable html visualize")
     return parser.parse_args()
 
 args = parse_args()
 
 dataset = PatchDataset(
-   args.samples, 
-   args.labels, 
-   args.num_dataset)
+   args.samples,
+   args.labels,
+   args.num_dataset,
+   patch_t=args.patch_t,
+   patch_y=args.patch_y,
+   patch_x=args.patch_x,
+   use_video=True)
 
 dataloader = torchdata.DataLoader(
    dataset, 
