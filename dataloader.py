@@ -29,8 +29,13 @@ class PatchDataset(torchdata.Dataset):
                patch_y=32, 
                patch_x=128, 
                gap=0.5, 
+               use_video=False, 
+               use_random=True, 
                ):
     super().__init__()
+
+    self.use_video = use_video
+    self.use_random = use_random
 
     files_raw = [f for f in os.listdir(raw_data_folder) if os.path.isfile(os.path.join(raw_data_folder, f)) and f.endswith(".tif")]
     files_label = [f for f in os.listdir(label_data_folder) if os.path.isfile(os.path.join(label_data_folder, f)) and f.endswith("_label.tif")]
@@ -79,9 +84,10 @@ class PatchDataset(torchdata.Dataset):
       gap_y = int(gap * patch_y) 
       gap_x = int(gap * patch_x)
 
-      for t in range(0, T-patch_t+1, gap_t):
-        for y in range(0, H-patch_y+1, gap_y): 
-          for x in range(0, W-patch_x+1, gap_x): 
+      
+      for y in range(0, H-patch_y+1, gap_y): 
+        for x in range(0, W-patch_x+1, gap_x): 
+          for t in range(0, T-patch_t+1, gap_t):
             self.sample_patchs.append(raw[t:t+patch_t, y:y+patch_y, x:x+patch_x])
             y1 = y * scale_h
             x1 = x * scale_w 
@@ -103,9 +109,11 @@ class PatchDataset(torchdata.Dataset):
     raw_img = self.sample_patchs[idx]
     label_img = self.label_patchs[idx] 
     
-    raw_img, label_img = random_transform(raw_img, label_img)
+    if self.use_random == True: 
+      raw_img, label_img = random_transform(raw_img, label_img)
 
-    raw_img = raw_img[0:1, :, :].squeeze(axis=0) # 暂时丢弃3D数据, 只使用其第一帧
+    if self.use_video == False: 
+      raw_img = raw_img[0:1, :, :].squeeze(axis=0) # 暂时丢弃3D数据, 只使用其第一帧
 
     # print(raw_img.shape, label_img.shape)
 

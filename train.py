@@ -59,7 +59,6 @@ for epoch in range(args.epoch):
 
     if idx % 10 == 0: 
       print(f"epoch {epoch} idx {idx} loss = {loss}")
-  if (epoch != 0 and epoch % 5 == 0) or (epoch == args.epoch-1): 
-    torch.save(net.state_dict(), os.path.join(args.checkpoint_folder, f"{net.name}_epoch{epoch}.pth"))
+  torch.save(net.state_dict(), os.path.join(args.checkpoint_folder, f"{net.name}_epoch{epoch}.pth"))
 
 

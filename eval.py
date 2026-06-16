@@ -37,7 +37,7 @@ def main():
     net.load_state_dict(torch.load(args.model, map_location=device, weights_only=False))
     net.eval()
 
-    dataset = PatchDataset(args.samples, args.labels, 1)
+    dataset = PatchDataset(args.samples, args.labels, 1, use_video=True, use_random=False)
 
     if args.num_samples is not None:
         indices = list(range(min(args.num_samples, len(dataset))))
@@ -56,26 +56,36 @@ def main():
     batch_metrics = []
 
     with torch.no_grad():
-        for sample, label in dataloader:
-            sample = sample.to(device)
-            label = label.to(device)
+        # for sample, label in dataloader:
 
-            sr = net(sample, label)
-            metrics = evaluate_batch(sr, label)
-            batch_metrics.append(metrics)
+        #     sample = sample[:, :, 0:1, :, :].squeeze(axis=1) # 暂时丢弃3D数据, 只使用其第一帧
+        #     sample = sample.to(device)
+        #     label = label.to(device)
 
-        for sample, label in dataloader: 
-            sample = sample.to(device)
-            label = label.to(device)
+        #     sr = net(sample, label)
+        #     metrics = evaluate_batch(sr, label)
+        #     batch_metrics.append(metrics)
 
-            sr = net(sample, label)
+        for idx, (sample, label) in enumerate(dataloader): 
+            
+            if idx == 21: 
 
-            basename = os.path.join(args.output_folder, net.name) 
-            write_tiff(sample.detach().cpu().numpy(), basename+"_sample.tif")
-            write_tiff(label.detach().cpu().numpy(), basename+"_label.tif")
-            write_tiff(sr.detach().cpu().numpy(), basename+"_sr.tif")
+                label = label.to(device)
+                sample = sample.to(device)
+                srs = []
+                
+                for idx in range(sample.shape[2]): 
+                    frame = sample[:, :, idx:(idx+1), :, :].squeeze(axis=1)
+                    sr = net(frame, label)
+                    srs.append(sr.detach().cpu().numpy()) 
 
-            break 
+                srs = np.stack(srs) 
+
+                basename = os.path.join(args.output_folder, net.name) 
+                write_tiff(sample.detach().cpu().numpy(), basename+"_sample.tif")
+                write_tiff(label.detach().cpu().numpy(), basename+"_label.tif")
+                write_tiff(srs, basename+"_sr.tif")
+                break
 
     if not batch_metrics:
         print("No samples evaluated.")
