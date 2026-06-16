@@ -23,6 +23,8 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--num-samples", type=int, default=None, help="Maximum number of samples to evaluate")
     parser.add_argument("--output-csv", type=str, default=None, help="Optional CSV path to save per-batch metrics")
+    parser.add_argument("--metric", action="store_true", help="display metric info")
+    parser.add_argument("--sample_id", type=int, default=21, help="the sample id write to tiff")
     return parser.parse_args()
 
 
@@ -56,19 +58,21 @@ def main():
     batch_metrics = []
 
     with torch.no_grad():
-        # for sample, label in dataloader:
 
-        #     sample = sample[:, :, 0:1, :, :].squeeze(axis=1) # 暂时丢弃3D数据, 只使用其第一帧
-        #     sample = sample.to(device)
-        #     label = label.to(device)
+        if args.metric is True: 
+            for sample, label in dataloader:
 
-        #     sr = net(sample, label)
-        #     metrics = evaluate_batch(sr, label)
-        #     batch_metrics.append(metrics)
+                sample = sample[:, :, 0:1, :, :].squeeze(axis=1) # 暂时丢弃3D数据, 只使用其第一帧
+                sample = sample.to(device)
+                label = label.to(device)
+
+                sr = net(sample, label)
+                metrics = evaluate_batch(sr, label)
+                batch_metrics.append(metrics)
 
         for idx, (sample, label) in enumerate(dataloader): 
             
-            if idx == 21: 
+            if idx == args.sample_id: 
 
                 label = label.to(device)
                 sample = sample.to(device)

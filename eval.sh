@@ -42,7 +42,7 @@ if [ "$DO_TRAIN" = true ]; then
     --checkpoint_folder ./checkpoint \
     --epoch ${TRAIN_EPOCH} \
     --batch-size 1 \
-    --num-dataset 1
+    --num-dataset 1 
 fi
 
 if [ "$DO_EVAL" = true ]; then
@@ -51,5 +51,7 @@ if [ "$DO_EVAL" = true ]; then
     --samples ~/zzydata/dataset_st/samples \
     --labels ~/zzydata/dataset_st/labels \
     --output_folder ~/tmp/result \
-    --batch-size 2
+    --batch-size 2 \
+    --metric \
+    --sample_id 21 
 fi
