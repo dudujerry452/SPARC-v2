@@ -86,67 +86,56 @@ class LTEVGG(nn.Module):
 
         return x1, x2, x3 
 
+class SearchTransfer(nn.Module): 
+   """
+    combination of RE and HA, input Q, K, V and get S, T
+    Q: (B, C, Hlv3, Wlv3)
+    K: (B, C, Hlv3, Wlv3) 
+    V: (B, C, Hlv1-3, Hlv1-3)
+   """
+   def forward(self, Q, K, V_v1, V_v2, V_v3):  
+      
+      B, _, H, W = Q.shape
 
-class RelianceEmbedding(nn.Module): 
-  """
-  相关性嵌入
-  """
-  def __init__(self, kernel_size=3):
-    super().__init__()
-    self.ks = kernel_size
-    self.pd = self.ks // 2
+      q_patchs = F.unfold(Q, kernel_size=3, padding=1) # (B, N_patch, N_q = Hlv3 * Wlv3)
+      k_patchs = F.unfold(K, kernel_size=3, padding=1) 
 
-  def forward(self, Q, K):  # Q: (B, C, Hl, Wl), K: (B, C, Hr, Wr)
+      q_patchs = F.normalize(q_patchs, p=2, dim=1) 
+      k_patchs = F.normalize(k_patchs, p=2, dim=1) 
 
-    # patch num = (H + 2*pd - ks) // stride + 1
-    # if ks = 3 and pd = 1, stride = 1, then number of patch will be HxW(have to be same)
-    # let N_q = the number of patchs = Hl x Wl, N_r = Hr x Wr, N_p(atch) = C x ks x ks
-    
-    outQ = F.unfold(Q, kernel_size=self.ks, padding=self.pd) # outQ: (B, N_p, N_q)
-    outK = F.unfold(K, kernel_size=self.ks, padding=self.pd) # outK: (B, N_p, N_r)
+      rel = torch.einsum("bdi,bdj->bij", q_patchs, k_patchs) # (B, N_q, N_q)
 
-    outQ = F.normalize(outQ, p=2, dim=1) # L2 normal
-    outK = F.normalize(outK, p=2, dim=1) 
+      S, H_idx = torch.max(rel, dim=2) # (B, N_q)
 
-    rel = torch.einsum("bdi,bdj->bij", outQ, outK) # rel: (B, N_q, N_r)
+      V_v3_patchs = F.unfold(V_v3, kernel_size=3, padding=1)
+      V_v2_patchs = F.unfold(V_v2, stride=2, kernel_size=6, padding=2) # 首先确定/2, 然后+4-6 = -2 = -1*2
+      V_v1_patchs = F.unfold(V_v1, stride=4, kernel_size=12, padding=4)  # (B, N_p, N_q)
 
-    H = torch.argmax(rel, dim=2)  # H: (B, N_q), hi \in (0, N_r)
-    S, _ = torch.max(rel, dim=2)   # S: (B, N_q), si \in (0, 1)
+      
+      idx = H_idx.unsqueeze(1).expand(-1, V_v3_patchs.shape[1], -1)
+      T_v3 = torch.gather(V_v3_patchs, dim=2, index=idx)  # T_v3[B][:][i] = V_v3_patchs[B][:][hi]
+      idx = H_idx.unsqueeze(1).expand(-1, V_v2_patchs.shape[1], -1)
+      T_v2 = torch.gather(V_v2_patchs, dim=2, index=idx)  # output = [b, c, input[b, c, i]]
+      idx = H_idx.unsqueeze(1).expand(-1, V_v1_patchs.shape[1], -1)
+      T_v1 = torch.gather(V_v1_patchs, dim=2, index=idx) 
 
-    return H, S
+      # fold back
+      _, _, H3, W3 = V_v3.shape
+      _, _, H2, W2 = V_v2.shape
+      _, _, H1, W1 = V_v1.shape
 
-class HardAttention(nn.Module): 
-  def forward(self, H, V): 
+      T_v3 = F.fold(T_v3, output_size=(H3, W3), kernel_size=3, padding=1) / 9
+      T_v2 = F.fold(T_v2, output_size=(H2, W2), kernel_size=6, padding=2, stride=2) / 9
+      T_v1 = F.fold(T_v1, output_size=(H1, W1), kernel_size=12, padding=4, stride=4) / 9 
 
-    B, C, Hr, Wr = V.shape 
-    N_q = H.shape[1] # N_q should = N_r (temporary)
-    N_r = Hr * Wr
+      S = S.view(B, 1, H, W) 
 
-    V_flat = V.reshape(B, C, N_r) 
-    H_idx = H.unsqueeze(1).expand(B, C, N_q)   # 在dim=1上复制C份, C_idx中的元素属于 0 ~ N_r
+      return S, T_v1, T_v2, T_v3
 
-    T = torch.gather(V_flat, dim=2, index=H_idx) # T: (B, C, N_q), ti's range = vi's range
-    return T 
 
-class Backbone(nn.Module):
-    """
-    示例用的骨干网
-    输入: LR: Hl x Wl 
-    输出: 特征图 (feat_ch, Hlr, Wlr)
-    """
-    def __init__(self, in_ch=1, feat_ch=64):
-        super().__init__()
-        self.body = nn.Sequential(
-            nn.Conv2d(in_ch, feat_ch, 3, 1, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feat_ch, feat_ch, 3, 1, 1),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feat_ch, feat_ch, 3, 1, 1),
-        )
 
-    def forward(self, lr):
-        return self.body(lr)   # (B, C, H, W)
-    
+
+
 class ResBlock(nn.Module): 
     def __init__(self, feat_ch=64, res_scale=1.0): 
       super().__init__()
@@ -171,7 +160,6 @@ class SFE(nn.Module):
             ResBlock(feat_ch) 
         )
         self.conv_tail = nn.Conv2d(feat_ch, feat_ch, 3, 1, 1) 
-    
     def forward(self, x): 
         x = self.conv_head(x) 
         res = self.resblk(x) 
@@ -272,8 +260,7 @@ class TTSR(nn.Module):
     self.name = "TTSR-basic"
 
     self.LTEVGG = LTEVGG(in_ch)
-    self.RE = RelianceEmbedding(kernel_size=3)
-    self.HA = HardAttention()
+    self.SearchTransfer = SearchTransfer()
     self.SA = SoftAttention(feat_ch)
     self.Backbone = SFE(in_ch, feat_ch)
     self.OL = OutputLayer(in_ch, feat_ch, scale=(4,1)) 
@@ -294,11 +281,10 @@ class TTSR(nn.Module):
 
     Q, K, V = lrsr_v3, refsr_v3, ref_v3 # (B, C, H1/4, W1/4)
 
-    H, S = self.RE(Q, K) # (B, N_q = H1*W1/16)
-    T = self.HA(H, V)  # (B, N_q)
+    S, T_v1, T_v2, T_v3 = self.SearchTransfer(Q, K, ref_v1, ref_v2, ref_v3)
 
-    S = S.view(B, -1, V.shape[2], V.shape[3]) # (B, C, H1/4, W1/4)
-    T = T.view(B, -1, V.shape[2], V.shape[3]) 
+    T = T_v3 
+
     S = F.interpolate(S, size=(lr.shape[2], lr.shape[3]), align_corners=False, mode="bicubic")
     T = F.interpolate(T, size=(lr.shape[2], lr.shape[3]), align_corners=False, mode="bicubic")
 
