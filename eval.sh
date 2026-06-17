@@ -49,7 +49,8 @@ if [ "$DO_TRAIN" = true ]; then
     --patch-y 32 \
     --patch-x 128 \
     --num-dataset 1 \
-    --continue-train
+    --continue-train \
+    --visualize
     # --denoise-weight ./checkpoint/denoise_init.pth
 fi
 
@@ -67,5 +68,5 @@ if [ "$DO_EVAL" = true ]; then
     --num-dataset 1 \
     --sample-id 21 \
     --whole-image \
-    --eval-frames 48
+    --eval-frames 1008
 fi

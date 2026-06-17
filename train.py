@@ -38,7 +38,7 @@ args = parse_args()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 if args.visualize:
-  start_visualizer(port=5000)
+  start_visualizer(port=5002)
 
 os.makedirs(args.checkpoint_folder, exist_ok=True)
 
@@ -192,11 +192,15 @@ for epoch in range(start_epoch, args.epoch):
             remain = (len(dataloader) - idx - 1) / it_per_s if it_per_s > 0 else 0
             pbar.set_postfix(loss=f"{loss.item():.4f}", remain=f"{remain:.0f}s")
 
-        if idx % 1000 == 0:
-            write_tiff(ref.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"ref_epoch{epoch}_batch{idx}.tif"))
-            write_tiff(target.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"target_epoch{epoch}_batch{idx}.tif"))
-            if gt is not None:
-                write_tiff(gt.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"gt_epoch{epoch}_batch{idx}.tif"))
+            send_tensor("target", target[0, 0, 0, :, :], "target") 
+            send_tensor("sr", sr[0, 0, 0, :, :], "sr") 
+
+        # if idx % 1000 == 0:
+        #     write_tiff(ref.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"ref_epoch{epoch}_batch{idx}.tif"))
+        #     write_tiff(target.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"target_epoch{epoch}_batch{idx}.tif"))
+            
+        #     if gt is not None:
+        #         write_tiff(gt.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"gt_epoch{epoch}_batch{idx}.tif"))
 
     torch.save(net.state_dict(), os.path.join(args.checkpoint_folder, f"{net.name}_epoch{epoch}.pth"))
 
