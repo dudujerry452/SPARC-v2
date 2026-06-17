@@ -60,6 +60,7 @@ else:
     denoise_dataset = PatchDataset(
        args.samples,
        args.labels,
+       args.groundtruth, 
        args.num_dataset,
        patch_t=args.patch_t,
        patch_y=args.patch_y,
@@ -87,7 +88,7 @@ else:
             noisy_even = sample[:, :, 0::2, :, :]
             noisy_odd  = sample[:, :, 1::2, :, :]
 
-            denoised, _ = denoise_model(noisy_even)
+            denoised = denoise_model(noisy_even)
 
             # denoise target: odd frames
             loss = criterion_d(denoised, noisy_odd)
@@ -170,7 +171,7 @@ for epoch in range(start_epoch, args.epoch):
         ref = label.unsqueeze(2).expand(-1, -1, T, -1, -1)
 
         with torch.no_grad():
-            denoised, _ = denoise_model(sample)
+            denoised = denoise_model(sample)
             # loss target: denoised + upsample_matrix (sequence pseudo-label)
             target_list = []
             for b in range(denoised.size(0)):

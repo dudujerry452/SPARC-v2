@@ -167,7 +167,8 @@ def inference_whole_image(raw, label, net, denoise_model, patch_t, patch_y, patc
             Tp = patch_tensor.size(2)
             ref = ref_tensor.expand(1, 1, Tp, -1, -1)
 
-            sr_patch = net(patch_tensor, ref).squeeze(0).cpu().numpy()  # (1, T, H*4, W)
+            denoised_patch = denoise_model(patch_tensor)
+            sr_patch = net(denoised_patch, ref).squeeze(0).cpu().numpy()  # (1, T, H*4, W)
 
             pss, pes = coord['patch_start_s'], coord['patch_end_s']
             psh, peh = coord['patch_start_h'] * 4, coord['patch_end_h'] * 4
@@ -261,7 +262,8 @@ def main():
         ref = label.unsqueeze(2).expand(-1, -1, T, -1, -1)
 
         with torch.no_grad():
-            sr = net(sample, ref)
+            denoised = denoise_model(sample)
+            sr = net(denoised, ref)
 
         print(f"Patch {args.sample_id} Mixed metric:")
         if gt is not None:

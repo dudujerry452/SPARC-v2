@@ -44,7 +44,7 @@ if [ "$DO_TRAIN" = true ]; then
     --epoch ${TRAIN_EPOCH} \
     --batch-size 1 \
     --denoise-batch-size 10 \
-    --denoise-epoch 5 \
+    --denoise-epoch 20 \
     --patch-t 16 \
     --patch-y 32 \
     --patch-x 128 \
