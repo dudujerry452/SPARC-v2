@@ -48,13 +48,14 @@ if [ "$DO_TRAIN" = true ]; then
     --patch-t 16 \
     --patch-y 32 \
     --patch-x 128 \
-    --num-dataset 1
+    --num-dataset 1 \
+    --continue-train \
     # --denoise-weight ./checkpoint/denoise_init.pth
 fi
 
 if [ "$DO_EVAL" = true ]; then
   python3 eval.py \
-    --model ./checkpoint/TTSR-basic_epoch${EPOCH_1}.pth \
+    --model ./checkpoint/TTSR-3d-denoised_epoch${EPOCH_1}.pth \
     --denoise-weight ./checkpoint/denoise_init.pth \
     --samples ~/zzydata/dataset_st/samples \
     --labels ~/zzydata/dataset_st/labels \

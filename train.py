@@ -10,7 +10,7 @@ from upsample_utils import upsample_matrix
 from visualizer.hook import start_visualizer, send_tensor
 from tqdm import tqdm
 import time
-import os, argparse
+import os, argparse, glob, re
 
 
 def parse_args():
@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument("--patch-x", type=int, default=128, help="Width patch size")
     parser.add_argument("--denoise-weight", type=str, default=None, help="Path to pretrained denoise model (skip denoise training if provided)")
     parser.add_argument("--visualize", action="store_true", help="enable html visualize")
+    parser.add_argument("--continue-train", action="store_true", help="enable html visualize")
     return parser.parse_args()
 
 
@@ -136,7 +137,23 @@ net = TTSR(in_ch=1, feat_ch=64).to(device)
 optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 criterion = nn.L1Loss()
 
-for epoch in range(args.epoch):
+if args.continue_train:
+    checkpoint_paths = glob.glob(os.path.join(args.checkpoint_folder, net.name + "_epoch*.pth"))
+    if checkpoint_paths:
+        def extract_epoch(path):
+            match = re.search(r"_epoch(\d+)\.pth$", os.path.basename(path))
+            return int(match.group(1)) if match else -1
+
+        latest = max(checkpoint_paths, key=extract_epoch)
+        start_epoch = extract_epoch(latest)+1
+        print(f"continue from checkpoint {latest}, epoch {start_epoch}")
+        net.load_state_dict(torch.load(latest, map_location=device, weights_only=False))
+    else:
+        start_epoch = 0
+else:
+    start_epoch = 0
+
+for epoch in range(start_epoch, args.epoch):
     net.train()
     pbar = tqdm(enumerate(dataloader), total=len(dataloader),
                 desc=f"TTSR epoch {epoch}/{args.epoch}")
