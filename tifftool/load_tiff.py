@@ -214,10 +214,27 @@ if __name__ == "__main__":
 
   parser = argparse.ArgumentParser(
       description="Evaluate reconstructed TIFF against ground truth (SPARC paper metrics)")
-  parser.add_argument("tif", type=str, help="Path to ground truth TIFF stack")
+  parser.add_argument("tif", type=str, nargs="+", help="Path to ground truth TIFF stack(s)")
   args = parser.parse_args()
 
-  tiff = load_tiff(args.tif)
+  if len(args.tif) == 2:
+    try:
+        from metrics import Mixed, SSIM, MAE, PSNR
+    except ImportError:
+        from tifftool.metrics import Mixed, SSIM, MAE
+
+    a = np.squeeze(load_tiff(args.tif[1]).astype(np.float32))
+    b = np.squeeze(load_tiff(args.tif[0]).astype(np.float32))
+
+    print(a.shape, b.shape)
+
+    print(f"PSNR: {PSNR(np.expand_dims(a, 0), np.expand_dims(b, 0)):.6f}")
+    print(f"SSIM: {SSIM(np.expand_dims(a, 0), np.expand_dims(b, 0)):.6f}")
+    print(f"MAE: {MAE(np.expand_dims(a, 0), np.expand_dims(b, 0)):.6f}")
+    print(f"Mixed: {Mixed(np.expand_dims(a, 0), np.expand_dims(b, 0)):.6f}")
+    sys.exit(0)
+
+  tiff = load_tiff(args.tif[0])
   summary = compute_tiff_summary(tiff)
   print_tiff_summary(summary)
   hist = print_ascii_histogram(tiff)
