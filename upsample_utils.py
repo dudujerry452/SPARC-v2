@@ -52,6 +52,7 @@ def upsample_matrix(frames, reference):
                     img_rows = np.array([int(rows / 4 - 2)] * 4 + [int(rows / 4 - 1)] * 4)
 
                 weights = W[idx, i]
+                # weights = weights / (weights.sum() + epsilon)  # normalize to avoid signal amplification/diffusion
                 img_vals = image[img_rows, :]
                 X_up_new[i, :] = np.sum(weights[:, None] * img_vals, axis=0) * ratios[i, :]
 

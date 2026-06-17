@@ -49,7 +49,7 @@ if [ "$DO_TRAIN" = true ]; then
     --patch-y 32 \
     --patch-x 128 \
     --num-dataset 1 \
-    --continue-train \
+    --continue-train
     # --denoise-weight ./checkpoint/denoise_init.pth
 fi
 
@@ -61,10 +61,11 @@ if [ "$DO_EVAL" = true ]; then
     --labels ~/zzydata/dataset_st/labels \
     --groundtruth ~/zzydata/dataset_st/groundtruth \
     --output_folder ~/tmp/result \
-    --batch-size 1 \
     --patch-t 16 \
     --patch-y 32 \
     --patch-x 128 \
-    --metric \
-    --sample_id 21
+    --num-dataset 1 \
+    --sample-id 21 \
+    --whole-image \
+    --eval-frames 48
 fi

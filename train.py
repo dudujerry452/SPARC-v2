@@ -146,8 +146,9 @@ if args.continue_train:
 
         latest = max(checkpoint_paths, key=extract_epoch)
         start_epoch = extract_epoch(latest)+1
-        print(f"continue from checkpoint {latest}, epoch {start_epoch}")
-        net.load_state_dict(torch.load(latest, map_location=device, weights_only=False))
+        if start_epoch != 0:  # -1: not valid
+            print(f"continue from checkpoint {latest}, epoch {start_epoch}")
+            net.load_state_dict(torch.load(latest, map_location=device, weights_only=False))
     else:
         start_epoch = 0
 else:
@@ -190,7 +191,7 @@ for epoch in range(start_epoch, args.epoch):
             remain = (len(dataloader) - idx - 1) / it_per_s if it_per_s > 0 else 0
             pbar.set_postfix(loss=f"{loss.item():.4f}", remain=f"{remain:.0f}s")
 
-        if idx % 100 == 0:
+        if idx % 1000 == 0:
             write_tiff(ref.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"ref_epoch{epoch}_batch{idx}.tif"))
             write_tiff(target.detach().cpu().numpy(), os.path.join(args.checkpoint_folder, f"target_epoch{epoch}_batch{idx}.tif"))
             if gt is not None:
